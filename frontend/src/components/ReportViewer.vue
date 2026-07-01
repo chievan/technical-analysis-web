@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { marked } from "marked";
 import type { AnalysisReport } from "../types";
 
 const props = defineProps<{
@@ -8,33 +9,15 @@ const props = defineProps<{
 
 const rendered = computed(() => {
   if (!props.report) return "";
-  // Convert markdown-like content to basic HTML
-  let html = props.report.report_md;
-  // Headers
-  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
-  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
-  // Bold
-  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  // Table rows
-  html = html.replace(/^\|(.+)\|$/gm, (row: string) => {
-    if (row.includes("---")) return '<hr class="table-divider">';
-    const cells = row
-      .split("|")
-      .filter((c) => c.trim())
-      .map((c) => `<td>${c.trim()}</td>`)
+  try {
+    return marked(props.report.report_md, { async: false }) as string;
+  } catch {
+    // Fallback: basic line-by-line rendering if marked fails
+    return props.report.report_md
+      .split("\n")
+      .map((line) => `<p>${line}</p>`)
       .join("");
-    return `<tr>${cells}</tr>`;
-  });
-  // Wrap tables
-  if (html.includes("<tr>")) {
-    html = html.replace(/(<tr>.*<\/tr>)/gs, "<table>$1</table>");
   }
-  // Lists
-  html = html.replace(/^(\d+)\. (.+)$/gm, "<li>$2</li>");
-  // Line breaks
-  html = html.replace(/\n\n/g, "</p><p>");
-  html = html.replace(/\n/g, "<br>");
-  return `<p>${html}</p>`;
 });
 </script>
 
@@ -56,6 +39,12 @@ const rendered = computed(() => {
   line-height: 1.8;
   font-size: 15px;
 }
+.report-content :deep(h1) {
+  font-size: 24px;
+  margin: 28px 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #1a1a2e;
+}
 .report-content :deep(h2) {
   font-size: 20px;
   margin: 24px 0 12px;
@@ -74,17 +63,43 @@ const rendered = computed(() => {
   border-collapse: collapse;
   margin: 16px 0;
 }
+.report-content :deep(th),
 .report-content :deep(td) {
   padding: 8px 12px;
   border: 1px solid #ddd;
   text-align: left;
 }
-.report-content :deep(hr.table-divider) {
-  display: none;
+.report-content :deep(th) {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+.report-content :deep(ul),
+.report-content :deep(ol) {
+  margin: 12px 0;
+  padding-left: 24px;
 }
 .report-content :deep(li) {
   margin-bottom: 6px;
-  margin-left: 20px;
+}
+.report-content :deep(code) {
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 13px;
+}
+.report-content :deep(pre) {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  padding: 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 16px 0;
+}
+.report-content :deep(blockquote) {
+  border-left: 4px solid #1a1a2e;
+  padding-left: 16px;
+  margin: 16px 0;
+  color: #666;
 }
 .empty-report {
   text-align: center;

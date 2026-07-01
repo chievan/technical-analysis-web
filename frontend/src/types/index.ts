@@ -24,7 +24,18 @@ export interface AnalysisStep {
   analysis_id: string;
   step_type: string;
   content: string;
-  metadata: string;
+  extra: string;
+  created_at: string;
+}
+
+export interface BacktestResult {
+  id: string;
+  symbol: string;
+  skill_version: string;
+  parameters: string;
+  results: string;
+  report_md: string;
+  chart_data: string;
   created_at: string;
 }
 

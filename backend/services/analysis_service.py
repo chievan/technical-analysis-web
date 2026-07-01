@@ -26,6 +26,7 @@ async def start_analysis(symbol: str, model: str, db: Session) -> AsyncGenerator
     db.refresh(analysis)
 
     full_content = ""
+    chart_data = {}
     error_occurred = False
     report_saved = False
 
@@ -50,6 +51,42 @@ async def start_analysis(symbol: str, model: str, db: Session) -> AsyncGenerator
             )
             yield f"data: {sse_event}\n\n"
 
+        elif event_type == "tool_call":
+            content = event["content"]
+            full_content += f"\n[工具调用: {content}]\n"
+
+            step = AnalysisStep(
+                analysis_id=analysis.id,
+                step_type="tool_call",
+                content=content,
+                extra="{}",
+            )
+            db.add(step)
+            db.commit()
+
+            yield f"data: {json.dumps({'type': 'tool_call', 'content': content}, ensure_ascii=False)}\n\n"
+
+        elif event_type == "tool_result":
+            content = event["content"]
+            full_content += f"\n[工具结果: {content}]\n"
+
+            step = AnalysisStep(
+                analysis_id=analysis.id,
+                step_type="tool_result",
+                content=content,
+                extra="{}",
+            )
+            db.add(step)
+            db.commit()
+
+            yield f"data: {json.dumps({'type': 'tool_result', 'content': content}, ensure_ascii=False)}\n\n"
+
+        elif event_type == "chart_data":
+            try:
+                chart_data = json.loads(event["content"])
+            except (json.JSONDecodeError, KeyError):
+                pass
+
         elif event_type == "report_chunk":
             content = event["content"]
             full_content += content
@@ -57,7 +94,7 @@ async def start_analysis(symbol: str, model: str, db: Session) -> AsyncGenerator
             yield f"data: {json.dumps({'type': 'report_chunk', 'content': content}, ensure_ascii=False)}\n\n"
 
         elif event_type == "report_complete":
-            _save_report(db, analysis, full_content)
+            _save_report(db, analysis, full_content, chart_data)
             report_saved = True
             yield _done_event(analysis.id, version)
 
@@ -78,12 +115,13 @@ async def start_analysis(symbol: str, model: str, db: Session) -> AsyncGenerator
         db.commit()
 
 
-def _save_report(db: Session, analysis: Analysis, content: str) -> None:
-    """Save the full report and mark analysis as completed."""
+def _save_report(db: Session, analysis: Analysis, content: str, chart_data: dict | None = None) -> None:
+    """Save the full report (with optional chart data) and mark analysis as completed."""
     report = AnalysisReport(
         id=str(uuid.uuid4()),
         analysis_id=analysis.id,
         report_md=content,
+        chart_data=json.dumps(chart_data, ensure_ascii=False) if chart_data else "{}",
     )
     db.add(report)
     analysis.status = "completed"

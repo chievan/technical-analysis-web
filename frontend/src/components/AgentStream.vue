@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from "vue";
+import { ref, watch, nextTick } from "vue";
 import type { SSEEvent } from "../types";
 
 const props = defineProps<{
@@ -18,31 +18,58 @@ watch(
   }
 );
 
-function eventContent(event: SSEEvent): string {
-  if (event.type === "tool_call") {
-    try {
-      const data = JSON.parse(event.content);
-      return (
-        `🛠 调用工具: ${data.tool}` +
-        (data.args ? `(${JSON.stringify(data.args)})` : "")
-      );
-    } catch {
-      return `🛠 ${event.content}`;
-    }
+function tryJsonParse(s: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(s) as Record<string, unknown>;
+  } catch {
+    return null;
   }
-  if (event.type === "tool_result") {
-    try {
-      const data = JSON.parse(event.content);
-      return `✅ ${data.tool}: ${data.summary || "完成"}`;
-    } catch {
-      return `✅ ${event.content}`;
-    }
-  }
-  return event.content;
 }
 
 function eventClass(type: string): string {
   return `step step--${type}`;
+}
+
+function toolLabel(tool: string): string {
+  const labels: Record<string, string> = {
+    run_ta_engine: "技术分析引擎",
+    read_reference: "参考文档",
+    run_backtester: "回测引擎",
+  };
+  return labels[tool] || tool;
+}
+
+function displayContent(event: SSEEvent): { label: string; body: string } {
+  if (event.type === "tool_call") {
+    const data = tryJsonParse(event.content);
+    if (data) {
+      const tool = (data.tool as string) || "";
+      const args = data.args as Record<string, string> | undefined;
+      return {
+        label: `🛠 工具调用 - ${toolLabel(tool)}`,
+        body: args ? `参数: ${JSON.stringify(args)}` : "",
+      };
+    }
+    return { label: "🛠 工具调用", body: event.content };
+  }
+  if (event.type === "tool_result") {
+    const data = tryJsonParse(event.content);
+    if (data) {
+      const tool = (data.tool as string) || "";
+      const summary = (data.summary as string) || "完成";
+      return {
+        label: `📊 工具结果 - ${toolLabel(tool)}`,
+        body: summary,
+      };
+    }
+    return { label: "📊 工具结果", body: event.content };
+  }
+  if (event.type === "report_chunk")
+    return { label: "📝 报告片段", body: event.content };
+  if (event.type === "thinking")
+    return { label: "💭 思考", body: event.content };
+  if (event.type === "error") return { label: "⚠️ 错误", body: event.content };
+  return { label: event.type, body: event.content };
 }
 </script>
 
@@ -50,25 +77,8 @@ function eventClass(type: string): string {
   <div class="agent-stream" ref="streamEl">
     <div v-if="events.length === 0" class="empty">等待分析开始...</div>
     <div v-for="(event, i) in events" :key="i" :class="eventClass(event.type)">
-      <div class="step-label">
-        <template v-if="event.type === 'thinking'">💭 思考</template>
-        <template v-else-if="event.type === 'tool_call'">🛠 工具调用</template>
-        <template v-else-if="event.type === 'tool_result'"
-          >📊 工具结果</template
-        >
-        <template v-else-if="event.type === 'report_chunk'"
-          >📝 报告片段</template
-        >
-        <template v-else-if="event.type === 'error'">⚠️ 错误</template>
-      </div>
-      <div class="step-content">
-        {{ eventContent(event) }}
-      </div>
-      <div
-        v-if="event.type === 'report_chunk'"
-        class="step-markdown"
-        v-html="event.content.replace(/\n/g, '<br>')"
-      ></div>
+      <div class="step-label">{{ displayContent(event).label }}</div>
+      <div class="step-content">{{ displayContent(event).body }}</div>
     </div>
   </div>
 </template>
@@ -127,14 +137,5 @@ function eventClass(type: string): string {
 .step-content {
   white-space: pre-wrap;
   word-break: break-word;
-}
-.step-markdown {
-  margin-top: 8px;
-  padding: 8px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 4px;
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
 }
 </style>
