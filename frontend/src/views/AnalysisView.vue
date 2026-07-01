@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import WatchlistSidebar from "../components/WatchlistSidebar.vue";
 import type { WatchlistItem } from "../components/WatchlistSidebar.vue";
@@ -39,7 +39,31 @@ function saveWatchlist() {
 }
 
 const watchlist = ref<WatchlistItem[]>(loadWatchlist());
-const selectedStock = ref(watchlist.value[0]?.code || "000300");
+const selectedStock = ref(""); // resolved on mount
+
+/* ─── On mount: pick the most recently analyzed stock ─── */
+onMounted(async () => {
+  try {
+    const recent = await fetchHistory({ limit: 1 });
+    if (recent.length > 0 && recent[0].status === "completed") {
+      const sym = recent[0].symbol;
+      // Ensure it's in the watchlist
+      if (!watchlist.value.some((s) => s.code === sym)) {
+        watchlist.value.unshift({
+          code: sym,
+          name: recent[0].symbol_name || sym,
+        });
+        saveWatchlist();
+      }
+      selectedStock.value = sym;
+      return;
+    }
+  } catch {
+    /* network error, fall through */
+  }
+  // No recent analysis → fall back to first watchlist item
+  selectedStock.value = watchlist.value[0]?.code || "000300";
+});
 
 function onSelectStock(code: string) {
   selectedStock.value = code;
