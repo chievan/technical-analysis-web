@@ -17,6 +17,16 @@ function dispose() {
   }
 }
 
+/** Replace leading zeros with null so ECharts doesn't render them as 0. */
+function leadingNull(arr: number[]): (number | null)[] {
+  let started = false;
+  return arr.map((v) => {
+    if (!started && v === 0) return null;
+    started = true;
+    return v;
+  });
+}
+
 function buildOption(): echarts.EChartsOption | null {
   if (!props.data || !props.data.klines || props.data.klines.length === 0) {
     return null;
@@ -240,10 +250,11 @@ function buildOption(): echarts.EChartsOption | null {
           type: "line" as const,
           xAxisIndex: 0,
           yAxisIndex: 0,
-          data: props.data![key] as number[],
+          data: leadingNull(props.data![key] as number[]),
           smooth: true,
           symbol: "none",
           lineStyle: { width: 1.5, color: maColor(period) },
+          connectNulls: false,
         };
       }),
       // Grid 1: Volume

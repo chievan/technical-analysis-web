@@ -97,18 +97,22 @@ async function submit() {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: hsla(240, 18%, 4%, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 200;
 }
 .modal-content {
-  background: #fff;
-  border-radius: 12px;
-  width: 460px;
+  background: hsla(240, 14%, 12%, 0.95);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  width: 480px;
   max-width: 90vw;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 16px 48px hsla(0, 0%, 0%, 0.5);
 }
 .modal-header {
   display: flex;
@@ -118,17 +122,22 @@ async function submit() {
 }
 .modal-header h3 {
   font-size: 18px;
+  color: var(--text-primary);
 }
 .close-btn {
-  background: none;
-  border: none;
-  font-size: 18px;
+  background: var(--bg-glass);
+  border: 1px solid var(--glass-border);
+  font-size: 16px;
   cursor: pointer;
-  color: #888;
-  padding: 4px 8px;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.2s;
 }
 .close-btn:hover {
-  color: #333;
+  background: hsla(0, 76%, 52%, 0.2);
+  border-color: var(--accent-red);
+  color: var(--accent-red);
 }
 .form-body {
   padding: 20px 24px;
@@ -150,21 +159,30 @@ async function submit() {
 }
 .field label {
   font-size: 13px;
-  font-weight: 600;
-  color: #666;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 .field input,
 .field select {
   padding: 8px 12px;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
+  background: var(--bg-glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
   font-size: 14px;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--accent-blue);
 }
 .error-message {
-  color: #ef4444;
+  color: var(--accent-red);
   font-size: 13px;
   padding: 8px 12px;
-  background: #fef2f2;
+  background: hsla(0, 76%, 52%, 0.1);
+  border: 1px solid hsla(0, 76%, 52%, 0.2);
   border-radius: 6px;
 }
 .modal-footer {
@@ -175,20 +193,29 @@ async function submit() {
 }
 .btn-cancel {
   padding: 8px 20px;
-  background: #f0f0f0;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
+  background: var(--bg-glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
   font-size: 14px;
   cursor: pointer;
+  color: var(--text-secondary);
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.btn-cancel:hover {
+  background: var(--bg-glass-hover);
+  color: var(--text-primary);
 }
 .btn-primary {
   padding: 8px 24px;
-  background: #1a1a2e;
+  background: linear-gradient(135deg, hsl(211, 90%, 52%), hsl(230, 70%, 48%));
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
   cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
 }
 .btn-primary:disabled {
   opacity: 0.5;

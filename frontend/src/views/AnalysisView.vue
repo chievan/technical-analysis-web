@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import AgentStream from "../components/AgentStream.vue";
+import { useRouter } from "vue-router";
+import WatchlistSidebar from "../components/WatchlistSidebar.vue";
+import type { WatchlistItem } from "../components/WatchlistSidebar.vue";
+import AnalysisModal from "../components/AnalysisModal.vue";
 import ReportViewer from "../components/ReportViewer.vue";
 import KLineChart from "../components/KLineChart.vue";
 import BacktestForm from "../components/BacktestForm.vue";
@@ -10,9 +13,56 @@ import { useSSE } from "../composables/useSSE";
 import { useAnalysis } from "../composables/useAnalysis";
 import type { AnalysisRecord, AnalysisReport, BacktestResult } from "../types";
 
-const symbol = ref("600519");
+const router = useRouter();
+
+/* ─── Watchlist ─── */
+const STORAGE_KEY = "ta-watchlist";
+const defaultWatchlist: WatchlistItem[] = [
+  { code: "000300", name: "沪深300" },
+  { code: "600519", name: "贵州茅台" },
+  { code: "600909", name: "华安证券" },
+  { code: "TL", name: "30年期国债期货" },
+];
+
+function loadWatchlist(): WatchlistItem[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as WatchlistItem[];
+  } catch {
+    /* ignore */
+  }
+  return defaultWatchlist;
+}
+
+function saveWatchlist() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(watchlist.value));
+}
+
+const watchlist = ref<WatchlistItem[]>(loadWatchlist());
+const selectedStock = ref(watchlist.value[0]?.code || "000300");
+
+function onSelectStock(code: string) {
+  selectedStock.value = code;
+}
+function onAddStock(code: string) {
+  const name = code; // will be refined by backend response
+  if (!watchlist.value.some((s) => s.code === code)) {
+    watchlist.value.push({ code, name });
+    saveWatchlist();
+  }
+}
+function onRemoveStock(code: string) {
+  watchlist.value = watchlist.value.filter((s) => s.code !== code);
+  if (selectedStock.value === code) {
+    selectedStock.value = watchlist.value[0]?.code || "";
+  }
+  saveWatchlist();
+}
+
+/* ─── State ─── */
 const model = ref("deepseek-chat");
 const analyzing = ref(false);
+const showAnalysisModal = ref(false);
 const finalReport = ref<AnalysisReport | null>(null);
 const chartData = ref<ChartData | null>(null);
 const sameSymbolHistory = ref<AnalysisRecord[]>([]);
@@ -20,11 +70,13 @@ const showHistory = ref(false);
 const showBacktestForm = ref(false);
 const backtestResult = ref<BacktestResult | null>(null);
 
-const { events, done, error, analysisId, chartDataStr, connect } = useSSE();
+/* ─── Composables ─── */
+const { events, done, error, analysisId, chartDataStr, connect, disconnect } =
+  useSSE();
 const { fetchReport, fetchHistory, fetchChartData, downloadReport } =
   useAnalysis();
 
-// Parse chart_data JSON string → object
+/* ─── SSE event handlers ─── */
 watch(chartDataStr, (val) => {
   if (val) {
     try {
@@ -37,9 +89,9 @@ watch(chartDataStr, (val) => {
 
 watch(done, async (val) => {
   if (val && analysisId.value) {
+    analyzing.value = false;
     try {
       finalReport.value = await fetchReport(analysisId.value);
-      // If chart data didn't come via SSE, try fetching from saved report
       if (!chartData.value) {
         const saved = await fetchChartData(analysisId.value);
         if (saved) {
@@ -51,19 +103,18 @@ watch(done, async (val) => {
         }
       }
     } catch {
-      // report may take a moment, set error for user feedback
       error.value = "分析报告加载失败，请尝试重新分析";
     }
-    analyzing.value = false;
   }
 });
 
-// Load same-symbol history when a report is available
 watch(finalReport, async (report) => {
   if (report) {
     try {
-      const records = await fetchHistory({ symbol: symbol.value, limit: 5 });
-      // Filter out the current analysis
+      const records = await fetchHistory({
+        symbol: selectedStock.value,
+        limit: 5,
+      });
       sameSymbolHistory.value = records.filter(
         (r) => r.id !== analysisId.value
       );
@@ -74,129 +125,203 @@ watch(finalReport, async (report) => {
   }
 });
 
-async function startAnalysis() {
-  if (!symbol.value.trim()) return;
+/* ─── Actions ─── */
+function startAnalysis() {
+  if (!selectedStock.value.trim()) return;
   analyzing.value = true;
+  showAnalysisModal.value = true;
   finalReport.value = null;
   chartData.value = null;
   sameSymbolHistory.value = [];
   showHistory.value = false;
 
-  const url = `/api/v1/analysis/start?symbol=${encodeURIComponent(symbol.value)}&model=${encodeURIComponent(model.value)}`;
+  const url = `/api/v1/analysis/start?symbol=${encodeURIComponent(selectedStock.value)}&model=${encodeURIComponent(model.value)}`;
   connect(url);
 }
 
-function loadHistorical(id: string) {
-  // Navigate to history detail page
-  window.open(`/history/${id}`, "_blank");
+function closeAnalysis() {
+  showAnalysisModal.value = false;
+  if (!done.value) {
+    disconnect();
+    analyzing.value = false;
+  }
 }
+
+function goHistory() {
+  router.push("/history");
+}
+
+function goBacktestHistory() {
+  router.push("/backtest");
+}
+
+/* ─── Try to load existing report on stock select ─── */
+watch(selectedStock, async (symbol) => {
+  if (!symbol) return;
+  try {
+    const records = await fetchHistory({ symbol, limit: 1 });
+    if (records.length > 0) {
+      const rec = records[0];
+      // Update stock name if available
+      if (rec.symbol_name) {
+        const item = watchlist.value.find((s) => s.code === symbol);
+        if (item && item.name !== rec.symbol_name) {
+          item.name = rec.symbol_name;
+          saveWatchlist();
+        }
+      }
+      finalReport.value = await fetchReport(rec.id).catch(() => null);
+      const saved = await fetchChartData(rec.id).catch(() => null);
+      if (saved) {
+        try {
+          chartData.value = JSON.parse(saved) as ChartData;
+        } catch {
+          chartData.value = null;
+        }
+      } else {
+        chartData.value = null;
+      }
+    } else {
+      finalReport.value = null;
+      chartData.value = null;
+    }
+  } catch {
+    finalReport.value = null;
+    chartData.value = null;
+  }
+});
 </script>
 
 <template>
-  <div class="analysis-view">
-    <h1>技术分析</h1>
+  <div class="analysis-layout">
+    <!-- Sidebar -->
+    <WatchlistSidebar
+      :items="watchlist"
+      :selected="selectedStock"
+      @select="onSelectStock"
+      @add="onAddStock"
+      @remove="onRemoveStock"
+    />
 
-    <div class="control-panel">
-      <div class="control-row">
-        <div class="field">
-          <label for="symbol">标的代码</label>
-          <input
-            id="symbol"
-            v-model="symbol"
-            placeholder="如 600519、000300、TL"
-            :disabled="analyzing"
-          />
+    <!-- Main area -->
+    <div class="main-area">
+      <!-- Top bar -->
+      <header class="topbar">
+        <div class="stock-title">
+          <span class="title-code">{{ selectedStock }}</span>
         </div>
-        <div class="field">
-          <label for="model">模型</label>
-          <select id="model" v-model="model" :disabled="analyzing">
+        <div class="topbar-actions">
+          <select class="ctrl-select" v-model="model">
             <option value="deepseek-chat">DeepSeek V4 Flash</option>
             <option value="deepseek-reasoner">DeepSeek V4 Pro</option>
           </select>
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
           <button
-            class="btn-primary"
+            class="ctrl-btn ctrl-btn-primary"
             @click="startAnalysis"
-            :disabled="analyzing || !symbol.trim()"
+            :disabled="analyzing || !selectedStock"
           >
             {{ analyzing ? "分析中..." : "开始分析" }}
           </button>
           <button
-            class="btn-backtest"
+            class="ctrl-btn"
             @click="showBacktestForm = true"
-            :disabled="!symbol.trim()"
-            v-if="!analyzing"
+            :disabled="!selectedStock"
           >
             回测
           </button>
+          <button class="ctrl-btn" @click="goHistory">历史分析</button>
+          <button class="ctrl-btn" @click="goBacktestHistory">历史回测</button>
+        </div>
+      </header>
+
+      <!-- Content -->
+      <div class="content">
+        <!-- Same-symbol history bar -->
+        <div class="history-bar" v-if="showHistory">
+          <span class="history-bar-label">同标历史分析：</span>
+          <button
+            v-for="r in sameSymbolHistory"
+            :key="r.id"
+            class="history-chip"
+            @click="router.push(`/history/${r.id}`)"
+            :title="r.conclusion"
+          >
+            {{ new Date(r.created_at).toLocaleDateString("zh-CN") }}
+          </button>
+        </div>
+
+        <!-- Chart -->
+        <section class="card-glass chart-section" v-if="chartData">
+          <div class="card-header">
+            <h2>行情图表</h2>
+          </div>
+          <div class="chart-body">
+            <KLineChart :data="chartData" />
+          </div>
+        </section>
+
+        <!-- Report -->
+        <section class="card-glass report-section" v-if="finalReport">
+          <div class="card-header">
+            <h2>技术分析报告</h2>
+            <div class="report-actions">
+              <button
+                class="ctrl-btn ctrl-btn-sm"
+                @click="
+                  downloadReport(
+                    analysisId || finalReport?.analysis_id || '',
+                    'md'
+                  )
+                "
+              >
+                导出 Markdown
+              </button>
+              <button
+                class="ctrl-btn ctrl-btn-sm"
+                @click="
+                  downloadReport(
+                    analysisId || finalReport?.analysis_id || '',
+                    'html'
+                  )
+                "
+              >
+                导出 HTML
+              </button>
+            </div>
+          </div>
+          <div class="report-body">
+            <ReportViewer :report="finalReport" />
+          </div>
+        </section>
+
+        <!-- Backtest result section -->
+        <section class="card-glass backtest-section" v-if="backtestResult">
+          <BacktestReport :result="backtestResult" />
+        </section>
+
+        <!-- Empty state -->
+        <div class="empty-state" v-if="!chartData && !finalReport">
+          <div class="empty-icon">📊</div>
+          <p>选择自选股，点击"开始分析"</p>
+          <p class="empty-hint">技术分析报告与行情图表将在此处展示</p>
         </div>
       </div>
     </div>
 
-    <!-- Same-symbol history bar -->
-    <div class="history-bar" v-if="showHistory">
-      <span class="history-bar-label">同标历史分析：</span>
-      <button
-        v-for="r in sameSymbolHistory"
-        :key="r.id"
-        class="history-chip"
-        @click="loadHistorical(r.id)"
-        :title="r.conclusion"
-      >
-        {{ new Date(r.created_at).toLocaleDateString("zh-CN") }}
-        <span class="chip-status" :class="r.status">{{ r.status }}</span>
-      </button>
-    </div>
+    <!-- Analysis Modal -->
+    <AnalysisModal
+      :visible="showAnalysisModal"
+      :title="`技术分析 - ${selectedStock}`"
+      :events="events"
+      :analyzing="analyzing"
+      :done="done"
+      @close="closeAnalysis"
+    />
 
-    <div class="error-banner" v-if="error">
-      <span>{{ error }}</span>
-      <button class="btn-retry" @click="startAnalysis">重试</button>
-    </div>
-
-    <div class="results-panel" v-if="events.length > 0 || finalReport">
-      <section class="stream-section">
-        <h2>执行过程</h2>
-        <AgentStream :events="events" />
-      </section>
-
-      <!-- Chart section -->
-      <section class="chart-section" v-if="chartData">
-        <h2>交互图表</h2>
-        <KLineChart :data="chartData" />
-      </section>
-
-      <section class="report-section" v-if="finalReport">
-        <h2>分析报告</h2>
-        <div class="report-actions">
-          <button
-            class="btn-export"
-            @click="downloadReport(analysisId || '', 'md')"
-          >
-            导出 Markdown
-          </button>
-          <button
-            class="btn-export"
-            @click="downloadReport(analysisId || '', 'html')"
-          >
-            导出 HTML
-          </button>
-        </div>
-        <ReportViewer :report="finalReport" />
-      </section>
-    </div>
-
-    <!-- Backtest report section -->
-    <section class="backtest-section" v-if="backtestResult">
-      <h2>回测结果</h2>
-      <BacktestReport :result="backtestResult" />
-    </section>
-
-    <!-- Backtest form modal -->
+    <!-- Backtest Form Modal -->
     <BacktestForm
       v-if="showBacktestForm"
-      :symbol="symbol"
+      :symbol="selectedStock"
       @close="showBacktestForm = false"
       @result="
         (r) => {
@@ -205,184 +330,209 @@ function loadHistorical(id: string) {
         }
       "
     />
-
-    <div class="empty-state" v-else>
-      <p>输入标的代码，选择模型，点击"开始分析"查看技术分析流程。</p>
-    </div>
   </div>
 </template>
 
 <style scoped>
-.analysis-view {
-  max-width: 900px;
-  margin: 0 auto;
-}
-h1 {
-  font-size: 24px;
-  margin-bottom: 20px;
-}
-.control-panel {
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 12px;
-}
-.control-row {
+.analysis-layout {
   display: flex;
-  gap: 16px;
-  align-items: flex-end;
-  flex-wrap: wrap;
+  min-height: 100vh;
 }
-.field {
+
+/* ─── Top Bar ─── */
+.main-area {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  min-width: 0;
 }
-.field label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #666;
-}
-.field input,
-.field select {
-  padding: 8px 12px;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
-  font-size: 14px;
-  min-width: 180px;
-}
-.btn-primary {
-  padding: 8px 24px;
-  background: #1a1a2e;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.btn-backtest {
-  padding: 8px 20px;
-  background: #fff;
-  color: #1a1a2e;
-  border: 1px solid #1a1a2e;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.btn-backtest:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.error-banner {
+.topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  padding: 14px 24px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-bottom: 1px solid var(--glass-border);
+  gap: 12px;
+}
+.stock-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.title-code {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ─── Controls ─── */
+.ctrl-select {
+  padding: 7px 32px 7px 12px;
+  background: var(--bg-glass);
+  border: 1px solid var(--glass-border);
   border-radius: 8px;
-  color: #dc2626;
-  font-size: 14px;
-  margin-bottom: 12px;
-}
-.btn-retry {
-  padding: 4px 12px;
-  background: #dc2626;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
+  color: var(--text-primary);
   font-size: 13px;
+  font-family: inherit;
   cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23888' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
 }
-.backtest-section {
-  margin-top: 24px;
+.ctrl-select:focus {
+  outline: none;
+  border-color: var(--accent-blue);
 }
-.backtest-section h2 {
-  font-size: 18px;
-  margin-bottom: 12px;
+.ctrl-btn {
+  padding: 7px 16px;
+  background: var(--bg-glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
+.ctrl-btn:hover {
+  background: var(--bg-glass-hover);
+  border-color: var(--glass-border-hover);
+  color: var(--text-primary);
+}
+.ctrl-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ctrl-btn-primary {
+  background: linear-gradient(135deg, hsl(211, 90%, 52%), hsl(230, 70%, 48%));
+  border-color: transparent;
+  color: #fff;
+  font-weight: 500;
+}
+.ctrl-btn-primary:hover {
+  background: linear-gradient(135deg, hsl(211, 90%, 58%), hsl(230, 70%, 54%));
+  color: #fff;
+}
+.ctrl-btn-primary:disabled {
+  opacity: 0.5;
+}
+.ctrl-btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+/* ─── Content ─── */
+.content {
+  flex: 1;
+  padding: 20px 24px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+/* ─── History bar ─── */
 .history-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
   padding: 10px 16px;
-  margin-bottom: 12px;
   flex-wrap: wrap;
 }
 .history-bar-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #888;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 .history-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  background: #f0f0f0;
-  border: 1px solid #ddd;
-  border-radius: 12px;
+  padding: 4px 12px;
+  background: hsla(240, 14%, 20%, 0.4);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
   font-size: 12px;
   cursor: pointer;
-  color: #333;
+  color: var(--text-secondary);
+  font-family: inherit;
+  transition: all 0.2s;
 }
 .history-chip:hover {
-  background: #e0e0e0;
+  background: var(--bg-glass-hover);
+  color: var(--text-primary);
+  border-color: var(--glass-border-hover);
 }
-.chip-status {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 8px;
-  color: #fff;
+
+/* ─── Card glass ─── */
+.card-glass {
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  box-shadow: var(--glass-shadow);
 }
-.chip-status.completed {
-  background: #22c55e;
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px 0;
 }
-.chip-status.failed {
-  background: #ef4444;
+.card-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
-.chip-status.running {
-  background: #3b82f6;
+.chart-body {
+  padding: 4px 8px 8px;
+}
+.report-body {
+  padding: 8px 22px 22px;
 }
 .report-actions {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
 }
-.btn-export {
-  padding: 6px 16px;
-  background: #1a1a2e;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  cursor: pointer;
+.backtest-section {
+  padding: 18px 22px;
 }
-.btn-export:hover {
-  opacity: 0.9;
-}
-.results-panel section {
-  margin-bottom: 24px;
-}
-.results-panel h2 {
-  font-size: 18px;
-  margin-bottom: 12px;
-}
+
+/* ─── Empty state ─── */
 .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100px 0;
   text-align: center;
-  padding: 80px 0;
-  color: #999;
-  font-size: 16px;
+}
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.4;
+}
+.empty-state p {
+  color: var(--text-muted);
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+.empty-hint {
+  font-size: 13px !important;
+  opacity: 0.7;
 }
 </style>

@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { RouterView, RouterLink } from "vue-router";
+import { computed } from "vue";
+import { RouterView, RouterLink, useRoute } from "vue-router";
+
+const route = useRoute();
+const isHome = computed(() => route.path === "/");
 </script>
 
 <template>
   <div class="app">
-    <header class="app-header">
+    <header v-if="!isHome" class="app-header">
       <nav>
         <RouterLink to="/" class="logo">技术分析</RouterLink>
         <div class="nav-links">
@@ -15,13 +19,36 @@ import { RouterView, RouterLink } from "vue-router";
         </div>
       </nav>
     </header>
-    <main class="app-main">
+    <main class="app-main" :class="{ 'app-main--full': isHome }">
       <RouterView />
     </main>
   </div>
 </template>
 
 <style>
+/* ─── Design System Tokens ─── */
+:root {
+  --bg-primary: hsl(240, 18%, 6%);
+  --bg-surface: hsla(240, 14%, 14%, 0.65);
+  --bg-sidebar: hsla(240, 16%, 10%, 0.92);
+  --bg-glass: hsla(240, 14%, 16%, 0.55);
+  --bg-glass-hover: hsla(240, 14%, 20%, 0.65);
+  --glass-border: hsla(0, 0%, 100%, 0.07);
+  --glass-border-hover: hsla(0, 0%, 100%, 0.14);
+  --glass-shadow: 0 8px 32px hsla(0, 0%, 0%, 0.4);
+  --glass-blur: 20px;
+
+  --accent-green: hsl(142, 76%, 45%);
+  --accent-red: hsl(0, 76%, 52%);
+  --accent-blue: hsl(211, 90%, 52%);
+  --accent-gold: hsl(42, 96%, 52%);
+  --accent-purple: hsl(262, 70%, 58%);
+
+  --text-primary: hsl(0, 0%, 90%);
+  --text-secondary: hsla(0, 0%, 100%, 0.6);
+  --text-muted: hsla(0, 0%, 100%, 0.35);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -29,10 +56,15 @@ import { RouterView, RouterLink } from "vue-router";
 }
 body {
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC",
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Noto Sans SC",
     sans-serif;
-  background: #f5f5f5;
-  color: #333;
+  background: hsl(240, 18%, 6%);
+  color: hsl(0, 0%, 90%);
+  min-height: 100vh;
 }
 .app-header {
   background: #1a1a2e;
@@ -73,5 +105,10 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px;
+}
+.app-main--full {
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }
 </style>

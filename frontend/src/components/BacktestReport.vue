@@ -87,10 +87,8 @@ const params = computed(() => {
 
 <style scoped>
 .backtest-report {
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 20px;
+  background: transparent;
+  padding: 0;
 }
 .report-header {
   display: flex;
@@ -100,15 +98,22 @@ const params = computed(() => {
 }
 .report-header h3 {
   font-size: 17px;
+  color: var(--text-primary);
 }
 .btn-export {
   padding: 6px 16px;
-  background: #1a1a2e;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
+  background: var(--bg-glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.btn-export:hover {
+  background: var(--bg-glass-hover);
+  color: var(--text-primary);
 }
 .metrics-grid {
   display: grid;
@@ -117,26 +122,27 @@ const params = computed(() => {
   margin-bottom: 16px;
 }
 .metric-card {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: hsla(240, 14%, 16%, 0.4);
+  border: 1px solid var(--glass-border);
   border-radius: 8px;
   padding: 14px;
   text-align: center;
 }
 .metric-label {
   font-size: 12px;
-  color: #888;
+  color: var(--text-muted);
   margin-bottom: 4px;
 }
 .metric-value {
   font-size: 20px;
   font-weight: 700;
+  color: var(--text-primary);
 }
 .metric-value.positive {
-  color: #22c55e;
+  color: var(--accent-green);
 }
 .metric-value.negative {
-  color: #ef4444;
+  color: var(--accent-red);
 }
 .params-info {
   margin-bottom: 16px;
@@ -144,30 +150,34 @@ const params = computed(() => {
 .params-info h4 {
   font-size: 14px;
   margin-bottom: 8px;
+  color: var(--text-secondary);
 }
 .params-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   font-size: 13px;
-  color: #666;
+  color: var(--text-muted);
 }
 .report-md h4 {
   font-size: 14px;
   margin-bottom: 8px;
+  color: var(--text-secondary);
 }
 .report-md pre {
-  background: #f5f5f5;
+  background: hsla(240, 16%, 10%, 0.6);
   padding: 12px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
   white-space: pre-wrap;
   max-height: 300px;
   overflow-y: auto;
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
 }
 .empty-state {
   text-align: center;
   padding: 40px;
-  color: #999;
+  color: var(--text-muted);
 }
 </style>
