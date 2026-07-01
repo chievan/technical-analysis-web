@@ -17,6 +17,27 @@ export function useSSE() {
   let currentUrl = "";
   let manuallyClosed = false;
 
+  // Stall detection: if no event received within STALL_TIMEOUT_MS, consider stalled
+  let stallTimer: ReturnType<typeof setTimeout> | null = null;
+  const STALL_TIMEOUT_MS = 120_000; // 2 minutes without any event = stalled
+
+  function resetStallTimer() {
+    if (stallTimer) clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => {
+      if (!manuallyClosed && !done.value) {
+        error.value = "分析连接已超时，服务器可能无响应，请重试";
+        disconnect();
+      }
+    }, STALL_TIMEOUT_MS);
+  }
+
+  function clearStallTimer() {
+    if (stallTimer) {
+      clearTimeout(stallTimer);
+      stallTimer = null;
+    }
+  }
+
   function connect(url: string) {
     disconnect();
     events.value = [];
@@ -37,7 +58,13 @@ export function useSSE() {
     connected.value = true;
     source = new EventSource(currentUrl);
 
+    // Start stall detection timer
+    resetStallTimer();
+
     source.onmessage = (event) => {
+      // Reset stall timer on any event received
+      resetStallTimer();
+
       try {
         const data = JSON.parse(event.data) as SSEEvent;
         events.value.push(data);
@@ -64,6 +91,8 @@ export function useSSE() {
 
     source.onerror = () => {
       connected.value = false;
+      clearStallTimer();
+
       // Auto reconnect with exponential backoff if not done and not manually closed
       if (!manuallyClosed && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         reconnectAttempts++;
@@ -80,6 +109,7 @@ export function useSSE() {
 
   function disconnect() {
     manuallyClosed = true;
+    clearStallTimer();
     if (source) {
       source.close();
       source = null;

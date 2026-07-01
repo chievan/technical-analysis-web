@@ -19,6 +19,7 @@ const analysis = ref<AnalysisRecord | null>(null);
 const report = ref<AnalysisReport | null>(null);
 const chartData = ref<ChartData | null>(null);
 const loading = ref(true);
+const loadError = ref<string | null>(null);
 const backtestRecords = ref<BacktestResult[]>([]);
 const backtestLoading = ref(false);
 
@@ -57,8 +58,8 @@ onMounted(async () => {
         backtestLoading.value = false;
       }
     }
-  } catch {
-    // report not found
+  } catch (e) {
+    loadError.value = e instanceof Error ? e.message : "加载失败，请返回重试";
   } finally {
     loading.value = false;
   }
@@ -72,6 +73,13 @@ onMounted(async () => {
     </button>
 
     <div v-if="loading" class="loading">加载中...</div>
+
+    <div v-else-if="loadError" class="error-banner">
+      <span>{{ loadError }}</span>
+      <button class="btn-back" @click="router.push('/history')">
+        ← 返回历史
+      </button>
+    </div>
 
     <template v-else-if="analysis">
       <div class="analysis-info">
@@ -157,6 +165,18 @@ onMounted(async () => {
   text-align: center;
   padding: 40px;
   color: #999;
+}
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  margin-bottom: 12px;
 }
 .not-found {
   text-align: center;

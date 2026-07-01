@@ -21,7 +21,8 @@ const showBacktestForm = ref(false);
 const backtestResult = ref<BacktestResult | null>(null);
 
 const { events, done, error, analysisId, chartDataStr, connect } = useSSE();
-const { fetchReport, fetchHistory, fetchChartData } = useAnalysis();
+const { fetchReport, fetchHistory, fetchChartData, downloadReport } =
+  useAnalysis();
 
 // Parse chart_data JSON string → object
 watch(chartDataStr, (val) => {
@@ -168,6 +169,20 @@ function loadHistorical(id: string) {
 
       <section class="report-section" v-if="finalReport">
         <h2>分析报告</h2>
+        <div class="report-actions">
+          <button
+            class="btn-export"
+            @click="downloadReport(analysisId || '', 'md')"
+          >
+            导出 Markdown
+          </button>
+          <button
+            class="btn-export"
+            @click="downloadReport(analysisId || '', 'html')"
+          >
+            导出 HTML
+          </button>
+        </div>
         <ReportViewer :report="finalReport" />
       </section>
     </div>
@@ -339,6 +354,23 @@ h1 {
 }
 .chip-status.running {
   background: #3b82f6;
+}
+.report-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.btn-export {
+  padding: 6px 16px;
+  background: #1a1a2e;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-export:hover {
+  opacity: 0.9;
 }
 .results-panel section {
   margin-bottom: 24px;

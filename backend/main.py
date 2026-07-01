@@ -1,3 +1,4 @@
+import ast
 import json
 import uuid
 from contextlib import asynccontextmanager
@@ -48,10 +49,46 @@ def get_skill_versions(db: Session = Depends(get_db)):
     from backend.models import SkillVersion
 
     versions = db.query(SkillVersion).order_by(SkillVersion.created_at.desc()).limit(50).all()
+
+    def _safe_files_count(v: SkillVersion) -> int:
+        """Parse files_hash safely, returning 0 on malformed data."""
+        try:
+            return len(ast.literal_eval(v.files_hash)) if v.files_hash else 0
+        except (ValueError, SyntaxError):
+            return 0
+
     return [
-        {"version": v.version, "change_summary": v.change_summary, "created_at": v.created_at.isoformat()}
+        {
+            "version": v.version,
+            "change_summary": v.change_summary,
+            "created_at": v.created_at.isoformat(),
+            "files_count": _safe_files_count(v),
+        }
         for v in versions
     ]
+
+
+@app.get("/api/v1/skill/versions/{version}")
+def get_skill_version_detail(version: str, db: Session = Depends(get_db)):
+    from backend.models import SkillVersion
+
+    v = db.query(SkillVersion).filter(SkillVersion.version == version).first()
+    if not v:
+        raise HTTPException(404, "Skill version not found")
+
+    files = {}
+    try:
+        files = ast.literal_eval(v.files_hash) if v.files_hash else {}
+    except (ValueError, SyntaxError):
+        pass
+
+    return {
+        "version": v.version,
+        "change_summary": v.change_summary,
+        "created_at": v.created_at.isoformat(),
+        "files": files,
+        "files_count": len(files),
+    }
 
 
 @app.get("/api/v1/analysis/start")
