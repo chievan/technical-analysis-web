@@ -91,5 +91,7 @@ export interface ChartData {
   rsi_series: number[];
   bollinger_series: BBSeries[];
   moving_averages: Record<string, unknown>;
+  support_levels?: number[];
+  resistance_levels?: number[];
   [key: string]: unknown;
 }

@@ -166,6 +166,38 @@ function buildOption(): echarts.EChartsOption | null {
           borderColor: upColor,
           borderColor0: downColor,
         },
+        markLine: {
+          silent: true,
+          symbol: "none",
+          data: [
+            ...(props.data?.support_levels || []).map((level) => ({
+              yAxis: level,
+              label: {
+                formatter: `支撑 ${level}`,
+                color: "#26a69a",
+                fontSize: 10,
+              },
+              lineStyle: {
+                color: "#26a69a",
+                type: "dashed" as const,
+                width: 1,
+              },
+            })),
+            ...(props.data?.resistance_levels || []).map((level) => ({
+              yAxis: level,
+              label: {
+                formatter: `阻力 ${level}`,
+                color: "#ef5350",
+                fontSize: 10,
+              },
+              lineStyle: {
+                color: "#ef5350",
+                type: "dashed" as const,
+                width: 1,
+              },
+            })),
+          ],
+        },
       },
       // Grid 0: Bollinger Bands
       {
