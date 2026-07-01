@@ -26,25 +26,45 @@ def compute_skill_hash() -> Dict[str, str]:
 
 
 def compute_version(db: Session) -> str:
-    """Determine current skill version (YYYY-MM-DD.N)."""
+    """Determine current skill version (YYYY-MM-DD.N).
+
+    Reuses an existing version if the skill files hash is unchanged,
+    otherwise creates a new incremental version for today.
+    """
     files_hash = compute_skill_hash()
+    files_hash_str = str(files_hash)
+
+    # Reuse existing version if files haven't changed
+    existing_match = (
+        db.query(SkillVersion)
+        .filter(SkillVersion.files_hash == files_hash_str)
+        .first()
+    )
+    if existing_match:
+        return existing_match.version
+
     today = date.today().isoformat()
     existing = (
         db.query(SkillVersion)
         .filter(SkillVersion.version.like(f"{today}%"))
         .order_by(SkillVersion.version.desc())
-        .first()
+        .all()
     )
 
-    if existing:
-        last_num = int(existing.version.split(".")[-1])
-        version = f"{today}.{last_num + 1}"
-    else:
-        version = f"{today}.1"
+    max_num = 0
+    for v in existing:
+        try:
+            num = int(v.version.split(".")[-1])
+            if num > max_num:
+                max_num = num
+        except (ValueError, IndexError):
+            continue
+
+    version = f"{today}.{max_num + 1}"
 
     record = SkillVersion(
         version=version,
-        files_hash=str(files_hash),
+        files_hash=files_hash_str,
         change_summary=f"Auto-detected on {datetime.utcnow().isoformat()}",
     )
     db.add(record)

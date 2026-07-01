@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from "vue";
+import { computed, ref, watch, nextTick } from "vue";
 import type { SSEEvent } from "../types";
 
 const props = defineProps<{
@@ -17,6 +17,23 @@ watch(
     }
   }
 );
+
+/** Merge consecutive same-type events (especially thinking) into groups. */
+const groupedEvents = computed(() => {
+  const groups: { type: string; content: string }[] = [];
+  for (const ev of props.events) {
+    if (
+      ev.type === "thinking" &&
+      groups.length > 0 &&
+      groups[groups.length - 1].type === "thinking"
+    ) {
+      groups[groups.length - 1].content += ev.content;
+    } else {
+      groups.push({ type: ev.type, content: ev.content });
+    }
+  }
+  return groups;
+});
 
 function tryJsonParse(s: string): Record<string, unknown> | null {
   try {
@@ -39,7 +56,10 @@ function toolLabel(tool: string): string {
   return labels[tool] || tool;
 }
 
-function displayContent(event: SSEEvent): { label: string; body: string } {
+function displayContent(event: { type: string; content: string }): {
+  label: string;
+  body: string;
+} {
   if (event.type === "tool_call") {
     const data = tryJsonParse(event.content);
     if (data) {
@@ -80,7 +100,11 @@ function displayContent(event: SSEEvent): { label: string; body: string } {
 <template>
   <div class="agent-stream" ref="streamEl">
     <div v-if="events.length === 0" class="empty">等待分析开始...</div>
-    <div v-for="(event, i) in events" :key="i" :class="eventClass(event.type)">
+    <div
+      v-for="(event, i) in groupedEvents"
+      :key="i"
+      :class="eventClass(event.type)"
+    >
       <div class="step-label">{{ displayContent(event).label }}</div>
       <div class="step-content">{{ displayContent(event).body }}</div>
     </div>
