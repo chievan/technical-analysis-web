@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from "vue";
+import { ref, computed, watch, nextTick } from "vue";
 import type { SSEEvent } from "../types";
 
 const props = defineProps<{
@@ -16,8 +16,25 @@ const emit = defineEmits<{
 
 const streamEl = ref<HTMLElement | null>(null);
 
+/** Merge consecutive same-type events (especially thinking) into groups. */
+const groupedEvents = computed(() => {
+  const groups: { type: string; content: string }[] = [];
+  for (const ev of props.events) {
+    if (
+      ev.type === "thinking" &&
+      groups.length > 0 &&
+      groups[groups.length - 1].type === "thinking"
+    ) {
+      groups[groups.length - 1].content += ev.content;
+    } else {
+      groups.push({ type: ev.type, content: ev.content });
+    }
+  }
+  return groups;
+});
+
 watch(
-  () => props.events.length,
+  () => groupedEvents.value.length,
   async () => {
     await nextTick();
     if (streamEl.value) {
@@ -26,7 +43,7 @@ watch(
   }
 );
 
-function eventLabel(event: SSEEvent): string {
+function eventLabel(event: { type: string; content: string }): string {
   switch (event.type) {
     case "thinking":
       return "💭 深度思考";
@@ -55,7 +72,7 @@ function tryJsonParse(s: string): Record<string, unknown> | null {
   }
 }
 
-function eventBody(event: SSEEvent): string {
+function eventBody(event: { type: string; content: string }): string {
   if (event.type === "tool_call") {
     const data = tryJsonParse(event.content);
     return data ? JSON.stringify(data.args || {}, null, 2) : event.content;
@@ -93,7 +110,7 @@ function eventBody(event: SSEEvent): string {
 
           <!-- Stream events -->
           <div
-            v-for="(ev, i) in events"
+            v-for="(ev, i) in groupedEvents"
             :key="i"
             class="stream-step"
             :class="'step--' + ev.type"
