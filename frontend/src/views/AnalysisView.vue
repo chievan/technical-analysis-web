@@ -179,6 +179,10 @@ function goBacktestHistory() {
   router.push("/backtest");
 }
 
+function goVersions() {
+  router.push("/versions");
+}
+
 /* ─── Try to load existing report on stock select ─── */
 watch(selectedStock, async (symbol) => {
   if (!symbol) return;
@@ -255,6 +259,7 @@ watch(selectedStock, async (symbol) => {
           </button>
           <button class="ctrl-btn" @click="goHistory">历史分析</button>
           <button class="ctrl-btn" @click="goBacktestHistory">历史回测</button>
+          <button class="ctrl-btn" @click="goVersions">版本</button>
         </div>
       </header>
 
