@@ -3,10 +3,12 @@ import { ref, watch } from "vue";
 import AgentStream from "../components/AgentStream.vue";
 import ReportViewer from "../components/ReportViewer.vue";
 import KLineChart from "../components/KLineChart.vue";
+import BacktestForm from "../components/BacktestForm.vue";
+import BacktestReport from "../components/BacktestReport.vue";
 import type { ChartData } from "../types";
 import { useSSE } from "../composables/useSSE";
 import { useAnalysis } from "../composables/useAnalysis";
-import type { AnalysisRecord, AnalysisReport } from "../types";
+import type { AnalysisRecord, AnalysisReport, BacktestResult } from "../types";
 
 const symbol = ref("600519");
 const model = ref("deepseek-chat");
@@ -15,8 +17,10 @@ const finalReport = ref<AnalysisReport | null>(null);
 const chartData = ref<ChartData | null>(null);
 const sameSymbolHistory = ref<AnalysisRecord[]>([]);
 const showHistory = ref(false);
+const showBacktestForm = ref(false);
+const backtestResult = ref<BacktestResult | null>(null);
 
-const { events, done, analysisId, chartDataStr, connect } = useSSE();
+const { events, done, error, analysisId, chartDataStr, connect } = useSSE();
 const { fetchReport, fetchHistory, fetchChartData } = useAnalysis();
 
 // Parse chart_data JSON string → object
@@ -46,7 +50,8 @@ watch(done, async (val) => {
         }
       }
     } catch {
-      // report may take a moment
+      // report may take a moment, set error for user feedback
+      error.value = "分析报告加载失败，请尝试重新分析";
     }
     analyzing.value = false;
   }
@@ -117,6 +122,14 @@ function loadHistorical(id: string) {
           >
             {{ analyzing ? "分析中..." : "开始分析" }}
           </button>
+          <button
+            class="btn-backtest"
+            @click="showBacktestForm = true"
+            :disabled="!symbol.trim()"
+            v-if="!analyzing"
+          >
+            回测
+          </button>
         </div>
       </div>
     </div>
@@ -136,6 +149,11 @@ function loadHistorical(id: string) {
       </button>
     </div>
 
+    <div class="error-banner" v-if="error">
+      <span>{{ error }}</span>
+      <button class="btn-retry" @click="startAnalysis">重试</button>
+    </div>
+
     <div class="results-panel" v-if="events.length > 0 || finalReport">
       <section class="stream-section">
         <h2>执行过程</h2>
@@ -153,6 +171,25 @@ function loadHistorical(id: string) {
         <ReportViewer :report="finalReport" />
       </section>
     </div>
+
+    <!-- Backtest report section -->
+    <section class="backtest-section" v-if="backtestResult">
+      <h2>回测结果</h2>
+      <BacktestReport :result="backtestResult" />
+    </section>
+
+    <!-- Backtest form modal -->
+    <BacktestForm
+      v-if="showBacktestForm"
+      :symbol="symbol"
+      @close="showBacktestForm = false"
+      @result="
+        (r) => {
+          backtestResult = r;
+          showBacktestForm = false;
+        }
+      "
+    />
 
     <div class="empty-state" v-else>
       <p>输入标的代码，选择模型，点击"开始分析"查看技术分析流程。</p>
@@ -213,6 +250,48 @@ h1 {
 .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.btn-backtest {
+  padding: 8px 20px;
+  background: #fff;
+  color: #1a1a2e;
+  border: 1px solid #1a1a2e;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-backtest:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.btn-retry {
+  padding: 4px 12px;
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.backtest-section {
+  margin-top: 24px;
+}
+.backtest-section h2 {
+  font-size: 18px;
+  margin-bottom: 12px;
 }
 .history-bar {
   display: flex;

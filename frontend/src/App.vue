@@ -10,6 +10,8 @@ import { RouterView, RouterLink } from "vue-router";
         <div class="nav-links">
           <RouterLink to="/">分析</RouterLink>
           <RouterLink to="/history">历史</RouterLink>
+          <RouterLink to="/backtest">回测</RouterLink>
+          <RouterLink to="/versions">版本</RouterLink>
         </div>
       </nav>
     </header>

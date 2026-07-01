@@ -35,6 +35,47 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_backtester",
+            "description": "运行回测系统，基于历史K线数据测试交易策略表现。返回回测结果含收益率、最大回撤、胜率等",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "标的代码，如 600519（A股）、000300（指数）、TL（期货）",
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "description": "回测开始日期，格式 YYYY-MM-DD",
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "回测结束日期，格式 YYYY-MM-DD",
+                    },
+                    "initial_capital": {
+                        "type": "number",
+                        "description": "初始资金（元），默认 100000",
+                    },
+                    "strategy": {
+                        "type": "string",
+                        "description": "策略名称，可选: trend_following(趋势跟踪), mean_reversion(均值回归)",
+                    },
+                    "ma_short": {
+                        "type": "integer",
+                        "description": "短期均线周期，默认 5",
+                    },
+                    "ma_long": {
+                        "type": "integer",
+                        "description": "长期均线周期，默认 20",
+                    },
+                },
+                "required": ["code"],
+            },
+        },
+    },
 ]
 
 TOOL_MAP = {t["function"]["name"]: t for t in TOOLS}

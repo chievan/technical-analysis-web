@@ -259,6 +259,13 @@ async def stream_analysis(
                                 "content": json.dumps(raw_result, ensure_ascii=False),
                             }
 
+                        # Emit structured backtest result
+                        if func_name == "run_backtester" and isinstance(raw_result, dict) and "error" not in raw_result:
+                            yield {
+                                "type": "backtest_result",
+                                "content": json.dumps(raw_result, ensure_ascii=False),
+                            }
+
                         result_str = (
                             json.dumps(raw_result, ensure_ascii=False)
                             if isinstance(raw_result, dict)

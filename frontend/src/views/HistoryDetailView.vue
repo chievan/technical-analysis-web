@@ -3,19 +3,24 @@ import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import ReportViewer from "../components/ReportViewer.vue";
 import KLineChart from "../components/KLineChart.vue";
-import type { ChartData } from "../types";
+import BacktestReport from "../components/BacktestReport.vue";
+import type { ChartData, BacktestResult } from "../types";
 import { useAnalysis } from "../composables/useAnalysis";
+import { useBacktest } from "../composables/useBacktest";
 import type { AnalysisRecord, AnalysisReport } from "../types";
 
 const route = useRoute();
 const router = useRouter();
 const { fetchAnalysis, fetchReport, fetchChartData, downloadReport } =
   useAnalysis();
+const { fetchBacktestHistory, fetchBacktest } = useBacktest();
 
 const analysis = ref<AnalysisRecord | null>(null);
 const report = ref<AnalysisReport | null>(null);
 const chartData = ref<ChartData | null>(null);
 const loading = ref(true);
+const backtestRecords = ref<BacktestResult[]>([]);
+const backtestLoading = ref(false);
 
 onMounted(async () => {
   try {
@@ -30,6 +35,26 @@ onMounted(async () => {
         chartData.value = JSON.parse(saved) as ChartData;
       } catch {
         /* not chart data */
+      }
+    }
+
+    // Load backtest history for this symbol (fetch full details for each)
+    if (analysis.value) {
+      backtestLoading.value = true;
+      try {
+        const summary = await fetchBacktestHistory({
+          symbol: analysis.value.symbol,
+          limit: 5,
+        });
+        // Fetch full details for each backtest record
+        const details = await Promise.all(
+          summary.map((r) => fetchBacktest(r.id).catch(() => null))
+        );
+        backtestRecords.value = details.filter(Boolean) as BacktestResult[];
+      } catch {
+        backtestRecords.value = [];
+      } finally {
+        backtestLoading.value = false;
       }
     }
   } catch {
@@ -86,6 +111,19 @@ onMounted(async () => {
       <section class="report-section">
         <h2>分析报告</h2>
         <ReportViewer :report="report" />
+      </section>
+
+      <!-- Backtest history section -->
+      <section class="backtest-section" v-if="backtestRecords.length > 0">
+        <h2>历史回测</h2>
+        <div v-if="backtestLoading" class="loading">加载中...</div>
+        <div v-else class="backtest-list">
+          <BacktestReport
+            v-for="r in backtestRecords"
+            :key="r.id"
+            :result="r"
+          />
+        </div>
       </section>
     </template>
 
@@ -176,5 +214,17 @@ onMounted(async () => {
 .report-section h2 {
   font-size: 18px;
   margin-bottom: 12px;
+}
+.backtest-section {
+  margin-top: 24px;
+}
+.backtest-section h2 {
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+.backtest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 </style>

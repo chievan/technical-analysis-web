@@ -4,6 +4,7 @@ export type SSEEventType =
   | "tool_result"
   | "report_chunk"
   | "chart_data"
+  | "backtest_result"
   | "report_complete"
   | "error"
   | "done";
@@ -35,14 +36,22 @@ export interface AnalysisStep {
   created_at: string;
 }
 
+// Backtest API response shapes
 export interface BacktestResult {
   id: string;
   symbol: string;
   skill_version: string;
-  parameters: string;
-  results: string;
-  report_md: string;
-  chart_data: string;
+  initial_capital?: number;
+  final_capital?: number;
+  total_return_pct?: number;
+  max_drawdown_pct?: number;
+  win_rate?: number;
+  total_trades?: number;
+  trades?: unknown[];
+  equity_curve?: unknown[];
+  parameters: Record<string, unknown>;
+  report_md?: string;
+  chart_data?: Record<string, unknown>;
   created_at: string;
 }
 
