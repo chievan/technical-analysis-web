@@ -22,10 +22,10 @@ const rendered = computed(() => {
 </script>
 
 <template>
-  <div class="report-viewer" v-if="report">
+  <div class="report-viewer" v-if="report && report.report_md">
     <div class="report-content" v-html="rendered"></div>
   </div>
-  <div v-else class="empty-report">暂无报告</div>
+  <div v-else class="empty-report">暂无分析结果</div>
 </template>
 
 <style scoped>

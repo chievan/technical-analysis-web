@@ -93,6 +93,40 @@ class TestRunTaEngine:
         assert result["symbol_name"] == "沪深300"
         assert result["data_points"] == 120
 
+    def test_engine_returns_time_series_data(self):
+        result = run_ta_engine("600519")
+        assert "klines" in result
+        assert len(result["klines"]) == 120
+        k = result["klines"][0]
+        assert "date" in k
+        assert "open" in k
+        assert "high" in k
+        assert "low" in k
+        assert "close" in k
+        assert "volume" in k
+
+    def test_engine_returns_indicator_series(self):
+        result = run_ta_engine("600519")
+        assert "ma5_series" in result
+        assert "ma10_series" in result
+        assert "ma20_series" in result
+        assert "ma60_series" in result
+        assert len(result["ma5_series"]) == 120
+        assert "macd_series" in result
+        assert len(result["macd_series"]) == 120
+        m = result["macd_series"][-1]
+        assert "dif" in m
+        assert "dea" in m
+        assert "histogram" in m
+        assert "rsi_series" in result
+        assert len(result["rsi_series"]) == 120
+        assert "bollinger_series" in result
+        assert len(result["bollinger_series"]) == 120
+        b = result["bollinger_series"][-1]
+        assert "upper" in b
+        assert "middle" in b
+        assert "lower" in b
+
     def test_engine_executes_from_subprocess(self):
         """Verify the engine can be invoked as a subprocess (as in production)."""
         import subprocess

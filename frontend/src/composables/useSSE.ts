@@ -6,12 +6,14 @@ export function useSSE() {
   const connected = ref(false);
   const done = ref(false);
   const analysisId = ref<string | null>(null);
+  const chartDataStr = ref<string>("");
   let source: EventSource | null = null;
 
   function connect(url: string) {
     disconnect();
     events.value = [];
     done.value = false;
+    chartDataStr.value = "";
     connected.value = true;
 
     source = new EventSource(url);
@@ -20,6 +22,11 @@ export function useSSE() {
       try {
         const data = JSON.parse(event.data) as SSEEvent;
         events.value.push(data);
+
+        // Accumulate chart_data for the K-line chart
+        if (data.type === "chart_data" && data.content) {
+          chartDataStr.value = data.content;
+        }
 
         if (data.type === "done") {
           done.value = true;
@@ -47,5 +54,13 @@ export function useSSE() {
 
   onUnmounted(() => disconnect());
 
-  return { events, connected, done, analysisId, connect, disconnect };
+  return {
+    events,
+    connected,
+    done,
+    analysisId,
+    chartDataStr,
+    connect,
+    disconnect,
+  };
 }

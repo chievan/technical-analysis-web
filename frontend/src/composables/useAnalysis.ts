@@ -25,6 +25,17 @@ export function useAnalysis() {
     return res.json();
   }
 
+  async function fetchChartData(id: string): Promise<string | null> {
+    try {
+      const report = await fetchReport(id);
+      return report.chart_data && report.chart_data !== "{}"
+        ? report.chart_data
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function fetchHistory(params?: {
     symbol?: string;
     skill_version?: string;
@@ -42,12 +53,37 @@ export function useAnalysis() {
     return res.json();
   }
 
+  async function downloadReport(
+    id: string,
+    format: "md" | "html"
+  ): Promise<void> {
+    try {
+      const report = await fetchReport(id);
+      const content =
+        format === "md"
+          ? report.report_md
+          : report.report_html || report.report_md;
+      const ext = format === "md" ? "md" : "html";
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `analysis-${id.slice(0, 8)}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // download failed silently
+    }
+  }
+
   return {
     loading,
     error,
     startAnalysis,
     fetchAnalysis,
     fetchReport,
+    fetchChartData,
     fetchHistory,
+    downloadReport,
   };
 }

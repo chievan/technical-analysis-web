@@ -146,10 +146,25 @@ def run_engine(symbol: str) -> dict:
     # Detect MA alignment
     ma_alignment = "多头排列" if last_ma5 > last_ma10 > last_ma20 > last_ma60 else "空头排列" if last_ma5 < last_ma10 < last_ma20 < last_ma60 else "交叉缠绕"
 
+    # Build chart-ready series
+    def _none_safe(series: list[float | None], default: float = 0) -> list[float]:
+        return [v if v is not None else default for v in series]
+
+    def _boll_safe(series: list[dict]) -> list[dict]:
+        return [{"middle": b["middle"] or 0, "upper": b["upper"] or 0, "lower": b["lower"] or 0} for b in series]
+
     return {
         "symbol": symbol,
         "symbol_name": {"600519": "贵州茅台", "000300": "沪深300", "TL": "TL主力合约"}.get(symbol, symbol),
         "data_points": len(klines),
+        "klines": klines,
+        "ma5_series": _none_safe(ma5),
+        "ma10_series": _none_safe(ma10),
+        "ma20_series": _none_safe(ma20),
+        "ma60_series": _none_safe(ma60),
+        "macd_series": macd,
+        "rsi_series": _none_safe(rsi14),
+        "bollinger_series": _boll_safe(boll),
         "latest": {
             "price": latest["close"],
             "change": round((latest["close"] - klines[-2]["close"]) / klines[-2]["close"] * 100, 2) if len(klines) > 1 else 0,

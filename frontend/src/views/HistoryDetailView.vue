@@ -2,15 +2,19 @@
 import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import ReportViewer from "../components/ReportViewer.vue";
+import KLineChart from "../components/KLineChart.vue";
+import type { ChartData } from "../types";
 import { useAnalysis } from "../composables/useAnalysis";
 import type { AnalysisRecord, AnalysisReport } from "../types";
 
 const route = useRoute();
 const router = useRouter();
-const { fetchAnalysis, fetchReport } = useAnalysis();
+const { fetchAnalysis, fetchReport, fetchChartData, downloadReport } =
+  useAnalysis();
 
 const analysis = ref<AnalysisRecord | null>(null);
 const report = ref<AnalysisReport | null>(null);
+const chartData = ref<ChartData | null>(null);
 const loading = ref(true);
 
 onMounted(async () => {
@@ -18,6 +22,16 @@ onMounted(async () => {
     const id = route.params.id as string;
     analysis.value = await fetchAnalysis(id);
     report.value = await fetchReport(id);
+
+    // Load chart data from saved report
+    const saved = await fetchChartData(id);
+    if (saved) {
+      try {
+        chartData.value = JSON.parse(saved) as ChartData;
+      } catch {
+        /* not chart data */
+      }
+    }
   } catch {
     // report not found
   } finally {
@@ -48,13 +62,39 @@ onMounted(async () => {
         <div v-if="analysis.conclusion" class="conclusion">
           {{ analysis.conclusion }}
         </div>
+
+        <!-- Export buttons -->
+        <div class="export-actions" v-if="report">
+          <button class="btn-export" @click="downloadReport(analysis.id, 'md')">
+            导出 Markdown
+          </button>
+          <button
+            class="btn-export"
+            @click="downloadReport(analysis.id, 'html')"
+          >
+            导出 HTML
+          </button>
+        </div>
       </div>
+
+      <!-- Chart section -->
+      <section class="chart-section" v-if="chartData">
+        <h2>交互图表</h2>
+        <KLineChart :data="chartData" />
+      </section>
 
       <section class="report-section">
         <h2>分析报告</h2>
         <ReportViewer :report="report" />
       </section>
     </template>
+
+    <div v-else class="not-found">
+      <p>分析记录未找到</p>
+      <button class="btn-back" @click="router.push('/history')">
+        ← 返回历史
+      </button>
+    </div>
   </div>
 </template>
 
@@ -80,6 +120,11 @@ onMounted(async () => {
   padding: 40px;
   color: #999;
 }
+.not-found {
+  text-align: center;
+  padding: 60px 0;
+  color: #999;
+}
 .analysis-info {
   background: #fff;
   border: 1px solid #e0e0e0;
@@ -97,6 +142,7 @@ onMounted(async () => {
   font-size: 13px;
   color: #888;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 .conclusion {
   padding: 12px;
@@ -105,6 +151,27 @@ onMounted(async () => {
   border-radius: 6px;
   font-size: 14px;
   color: #166534;
+  margin-bottom: 12px;
+}
+.export-actions {
+  display: flex;
+  gap: 8px;
+}
+.btn-export {
+  padding: 6px 16px;
+  background: #1a1a2e;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-export:hover {
+  opacity: 0.9;
+}
+.chart-section h2 {
+  font-size: 18px;
+  margin-bottom: 12px;
 }
 .report-section h2 {
   font-size: 18px;

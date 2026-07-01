@@ -1,5 +1,12 @@
 export type SSEEventType =
-  "thinking" | "tool_call" | "tool_result" | "report_chunk" | "error" | "done";
+  | "thinking"
+  | "tool_call"
+  | "tool_result"
+  | "report_chunk"
+  | "chart_data"
+  | "report_complete"
+  | "error"
+  | "done";
 
 export interface SSEEvent {
   type: SSEEventType;
@@ -48,4 +55,41 @@ export interface AnalysisReport {
   key_levels: string;
   five_dimension: string;
   created_at: string;
+}
+
+// Chart data structures for KLineChart
+export interface KLineData {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface BBSeries {
+  upper: number;
+  middle: number;
+  lower: number;
+}
+
+export interface MACDSeries {
+  dif: number;
+  dea: number;
+  histogram: number;
+}
+
+export interface ChartData {
+  symbol: string;
+  symbol_name: string;
+  klines: KLineData[];
+  ma5_series: number[];
+  ma10_series: number[];
+  ma20_series: number[];
+  ma60_series: number[];
+  macd_series: MACDSeries[];
+  rsi_series: number[];
+  bollinger_series: BBSeries[];
+  moving_averages: Record<string, unknown>;
+  [key: string]: unknown;
 }

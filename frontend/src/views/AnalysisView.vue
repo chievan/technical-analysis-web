@@ -2,22 +2,49 @@
 import { ref, watch } from "vue";
 import AgentStream from "../components/AgentStream.vue";
 import ReportViewer from "../components/ReportViewer.vue";
+import KLineChart from "../components/KLineChart.vue";
+import type { ChartData } from "../types";
 import { useSSE } from "../composables/useSSE";
 import { useAnalysis } from "../composables/useAnalysis";
-import type { AnalysisReport } from "../types";
+import type { AnalysisRecord, AnalysisReport } from "../types";
 
 const symbol = ref("600519");
 const model = ref("deepseek-chat");
 const analyzing = ref(false);
 const finalReport = ref<AnalysisReport | null>(null);
+const chartData = ref<ChartData | null>(null);
+const sameSymbolHistory = ref<AnalysisRecord[]>([]);
+const showHistory = ref(false);
 
-const { events, done, analysisId, connect } = useSSE();
-const { fetchReport } = useAnalysis();
+const { events, done, analysisId, chartDataStr, connect } = useSSE();
+const { fetchReport, fetchHistory, fetchChartData } = useAnalysis();
+
+// Parse chart_data JSON string → object
+watch(chartDataStr, (val) => {
+  if (val) {
+    try {
+      chartData.value = JSON.parse(val) as ChartData;
+    } catch {
+      chartData.value = null;
+    }
+  }
+});
 
 watch(done, async (val) => {
   if (val && analysisId.value) {
     try {
       finalReport.value = await fetchReport(analysisId.value);
+      // If chart data didn't come via SSE, try fetching from saved report
+      if (!chartData.value) {
+        const saved = await fetchChartData(analysisId.value);
+        if (saved) {
+          try {
+            chartData.value = JSON.parse(saved) as ChartData;
+          } catch {
+            /* ignore */
+          }
+        }
+      }
     } catch {
       // report may take a moment
     }
@@ -25,13 +52,37 @@ watch(done, async (val) => {
   }
 });
 
+// Load same-symbol history when a report is available
+watch(finalReport, async (report) => {
+  if (report) {
+    try {
+      const records = await fetchHistory({ symbol: symbol.value, limit: 5 });
+      // Filter out the current analysis
+      sameSymbolHistory.value = records.filter(
+        (r) => r.id !== analysisId.value
+      );
+      showHistory.value = sameSymbolHistory.value.length > 0;
+    } catch {
+      sameSymbolHistory.value = [];
+    }
+  }
+});
+
 async function startAnalysis() {
   if (!symbol.value.trim()) return;
   analyzing.value = true;
   finalReport.value = null;
+  chartData.value = null;
+  sameSymbolHistory.value = [];
+  showHistory.value = false;
 
   const url = `/api/v1/analysis/start?symbol=${encodeURIComponent(symbol.value)}&model=${encodeURIComponent(model.value)}`;
   connect(url);
+}
+
+function loadHistorical(id: string) {
+  // Navigate to history detail page
+  window.open(`/history/${id}`, "_blank");
 }
 </script>
 
@@ -70,10 +121,31 @@ async function startAnalysis() {
       </div>
     </div>
 
+    <!-- Same-symbol history bar -->
+    <div class="history-bar" v-if="showHistory">
+      <span class="history-bar-label">同标历史分析：</span>
+      <button
+        v-for="r in sameSymbolHistory"
+        :key="r.id"
+        class="history-chip"
+        @click="loadHistorical(r.id)"
+        :title="r.conclusion"
+      >
+        {{ new Date(r.created_at).toLocaleDateString("zh-CN") }}
+        <span class="chip-status" :class="r.status">{{ r.status }}</span>
+      </button>
+    </div>
+
     <div class="results-panel" v-if="events.length > 0 || finalReport">
       <section class="stream-section">
         <h2>执行过程</h2>
         <AgentStream :events="events" />
+      </section>
+
+      <!-- Chart section -->
+      <section class="chart-section" v-if="chartData">
+        <h2>交互图表</h2>
+        <KLineChart :data="chartData" />
       </section>
 
       <section class="report-section" v-if="finalReport">
@@ -102,7 +174,7 @@ h1 {
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   padding: 20px;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 .control-row {
   display: flex;
@@ -141,6 +213,53 @@ h1 {
 .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.history-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.history-bar-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #888;
+  white-space: nowrap;
+}
+.history-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #333;
+}
+.history-chip:hover {
+  background: #e0e0e0;
+}
+.chip-status {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  color: #fff;
+}
+.chip-status.completed {
+  background: #22c55e;
+}
+.chip-status.failed {
+  background: #ef4444;
+}
+.chip-status.running {
+  background: #3b82f6;
 }
 .results-panel section {
   margin-bottom: 24px;

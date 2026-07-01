@@ -66,6 +66,10 @@ function displayContent(event: SSEEvent): { label: string; body: string } {
   }
   if (event.type === "report_chunk")
     return { label: "📝 报告片段", body: event.content };
+  if (event.type === "report_complete")
+    return { label: "✅ 报告完成", body: "" };
+  if (event.type === "chart_data")
+    return { label: "📈 图表数据已就绪", body: "K线图数据已加载，准备渲染" };
   if (event.type === "thinking")
     return { label: "💭 思考", body: event.content };
   if (event.type === "error") return { label: "⚠️ 错误", body: event.content };
