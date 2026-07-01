@@ -1,5 +1,5 @@
 export type SSEEventType =
-  "thinking" | "tool_call" | "tool_result" | "report_chunk" | "done";
+  "thinking" | "tool_call" | "tool_result" | "report_chunk" | "error" | "done";
 
 export interface SSEEvent {
   type: SSEEventType;

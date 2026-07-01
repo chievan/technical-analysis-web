@@ -59,8 +59,11 @@ function eventClass(type: string): string {
         <template v-else-if="event.type === 'report_chunk'"
           >📝 报告片段</template
         >
+        <template v-else-if="event.type === 'error'">⚠️ 错误</template>
       </div>
-      <div class="step-content">{{ eventContent(event) }}</div>
+      <div class="step-content">
+        {{ eventContent(event) }}
+      </div>
       <div
         v-if="event.type === 'report_chunk'"
         class="step-markdown"
@@ -106,6 +109,13 @@ function eventClass(type: string): string {
 .step--report_chunk {
   background: rgba(234, 179, 8, 0.1);
   border-left: 3px solid #eab308;
+}
+.step--error {
+  background: rgba(239, 68, 68, 0.15);
+  border-left: 3px solid #ef4444;
+}
+.step--error .step-content {
+  color: #fca5a5;
 }
 .step-label {
   font-size: 11px;
