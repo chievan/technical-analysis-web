@@ -27,6 +27,27 @@ function leadingNull(arr: number[]): (number | null)[] {
   });
 }
 
+/**
+ * Cluster nearby level values so ECharts doesn't draw nearly-coincident lines.
+ * Values within clusterThreshold% of each other are averaged into one.
+ */
+function clusterLevels(levels: number[], threshold = 0.005): number[] {
+  if (levels.length < 2) return levels;
+  const sorted = [...levels].sort((a, b) => a - b);
+  const clusters: number[][] = [];
+  for (const v of sorted) {
+    const last = clusters[clusters.length - 1];
+    if (last && Math.abs(v - last[0]) / last[0] < threshold) {
+      last.push(v);
+    } else {
+      clusters.push([v]);
+    }
+  }
+  return clusters.map(
+    (c) => Math.round((c.reduce((s, n) => s + n, 0) / c.length) * 100) / 100
+  );
+}
+
 function buildOption(): echarts.EChartsOption | null {
   if (!props.data || !props.data.klines || props.data.klines.length === 0) {
     return null;
@@ -180,7 +201,7 @@ function buildOption(): echarts.EChartsOption | null {
           silent: true,
           symbol: "none",
           data: [
-            ...(props.data?.support_levels || []).map((level) => ({
+            ...clusterLevels(props.data?.support_levels || []).map((level) => ({
               yAxis: level,
               label: {
                 formatter: `支撑 ${level}`,
@@ -193,19 +214,21 @@ function buildOption(): echarts.EChartsOption | null {
                 width: 1,
               },
             })),
-            ...(props.data?.resistance_levels || []).map((level) => ({
-              yAxis: level,
-              label: {
-                formatter: `阻力 ${level}`,
-                color: "#ef5350",
-                fontSize: 10,
-              },
-              lineStyle: {
-                color: "#ef5350",
-                type: "dashed" as const,
-                width: 1,
-              },
-            })),
+            ...clusterLevels(props.data?.resistance_levels || []).map(
+              (level) => ({
+                yAxis: level,
+                label: {
+                  formatter: `阻力 ${level}`,
+                  color: "#ef5350",
+                  fontSize: 10,
+                },
+                lineStyle: {
+                  color: "#ef5350",
+                  type: "dashed" as const,
+                  width: 1,
+                },
+              })
+            ),
           ],
         },
       },
