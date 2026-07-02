@@ -16,6 +16,7 @@ const isHome = computed(() => route.path === "/");
           <RouterLink to="/history">历史</RouterLink>
           <RouterLink to="/backtest">回测</RouterLink>
           <RouterLink to="/versions">版本</RouterLink>
+          <RouterLink to="/skill-editor">策略</RouterLink>
         </div>
       </nav>
     </header>

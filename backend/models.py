@@ -19,6 +19,7 @@ class Analysis(Base):
     symbol_name = Column(String, default="")
     model = Column(String, nullable=False)
     skill_version = Column(String, nullable=False)
+    analysis_date = Column(String, default="", index=True)
     status = Column(String, default="pending")
     conclusion = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -73,5 +74,6 @@ class SkillVersion(Base):
 
     version = Column(String, primary_key=True)
     files_hash = Column(Text, nullable=False)
+    commit_sha = Column(String, nullable=True)
     change_summary = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)

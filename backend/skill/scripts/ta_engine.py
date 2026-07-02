@@ -11,13 +11,20 @@ import json
 import math
 import random
 import sys
+from datetime import datetime, timedelta
 
 
 def generate_kline(base_price: float, days: int, seed: int) -> list[dict]:
-    """Generate realistic OHLCV data using a seeded random walk."""
+    """Generate realistic OHLCV data using a seeded random walk.
+
+    Dates run from (today - days) to today, so the last candle
+    is always the most recent calendar date.
+    """
     rng = random.Random(seed)
     klines = []
     price = base_price
+    today = datetime.today()
+    start_date = today - timedelta(days=days - 1)
 
     for i in range(days):
         change = rng.gauss(0, 1.5)
@@ -26,8 +33,9 @@ def generate_kline(base_price: float, days: int, seed: int) -> list[dict]:
         low = round(min(price, close) * (1 - abs(rng.gauss(0, 0.8)) / 100), 2)
         open_price = round(price, 2)
         volume = int(rng.uniform(50000, 500000) * (1 + abs(change) * 3))
+        d = start_date + timedelta(days=i)
         klines.append({
-            "date": f"2026-{(i // 30) + 1:02d}-{(i % 30) + 1:02d}",
+            "date": d.strftime("%Y-%m-%d"),
             "open": open_price,
             "high": high,
             "low": low,

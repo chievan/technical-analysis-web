@@ -113,3 +113,143 @@ Two modal surfaces exist:
 2. Apply `.card-glass` pattern for any surface panel.
 3. Use `backdrop-filter: blur(x)` for frosted-glass effect.
 4. Follow the button system for interactive elements.
+
+---
+
+# Skill Strategy Editor — Design Specification
+
+Adopted 2026-07-01 after `/grill-with-docs` session.
+
+## Version Control: Git Commit + SQLite Index
+
+### Mechanism
+
+- **PUT /api/v1/skill/files** writes changed files to disk, then executes `git add backend/skill/` and `git commit` in the repo root.
+- **SQLite `SkillVersion` table** records version metadata: version (`YYYY-MM-DD.N`), `commit_sha`, `files_hash`, `change_summary`, `created_at`.
+- **Rollback** via `git checkout <commit-sha> -- backend/skill/` — restores only the skill directory, leaving other code untouched.
+
+### SkillVersion model additions
+
+- New field `commit_sha` (String, nullable) — the full SHA of the git commit created for this version.
+
+## Frontend Editor: File Tree + CodeMirror 6
+
+### Layout
+
+```
+┌─────────────────────┬──────────────────────────────────────┐
+│  File Tree (280px)  │  Code Editor                         │
+│                     │  (CodeMirror 6 via vue-codemirror)   │
+│  📁 skill/          │                                      │
+│   ├─ SKILL.md       │  Syntax highlighting:                │
+│   ├─ scripts/       │  - .md → markdown                   │
+│   │  ├─ ta_engine.py│  - .py → python                     │
+│   │  └─ indicator.py│                                      │
+│   └─ references/    │                                      │
+│      ├─ ...         │  Line numbers, dark theme            │
+│      └─ ...         │                                      │
+│                     │                                      │
+│  [Save All] [Reset] │                                      │
+└─────────────────────┴──────────────────────────────────────┘
+```
+
+### File Tree
+
+- **Self-built Vue 3 component** (`SkillFileTree.vue`) — no external tree library.
+- Directory depth max 2 levels (SKILL.md root + scripts/ + references/).
+- Visual: dark surface (`--bg-sidebar`), active file highlight with accent-blue left border.
+- Click file → emit event → load content into CodeMirror.
+
+### Code Editor
+
+- **CodeMirror 6** via `vue-codemirror` package.
+- Languages: `@codemirror/lang-markdown`, `@codemirror/lang-python`.
+- Theme: dark theme (`@codemirror/theme-one-dark` or custom).
+- Features: line numbers, syntax highlighting, read-only indicator.
+
+### States & Edge Cases
+
+| State             | Behavior                                                                 |
+| ----------------- | ------------------------------------------------------------------------ |
+| Loading           | Skeleton placeholders for file tree; editor shows "Loading…"             |
+| Empty skill dir   | File tree shows "No skill files found" message; editor empty             |
+| PUT save success  | Toast "Saved — v{version} ({commit_sha[:7]})"                            |
+| PUT save conflict | Toast "Save conflict — skill files changed externally"                   |
+| PUT save error    | Toast with error details; editor content preserved                       |
+| Unsaved changes   | Dirty dot indicator on file tree item; confirm dialog on navigation away |
+| Non-existent file | Editor pane shows "File not found"                                       |
+| Rollback          | Confirmation dialog before `git checkout`; show version diff summary     |
+
+## API Contract
+
+### GET /api/v1/skill/files
+
+Returns the full file tree with content for every file.
+
+**Response 200:**
+
+```json
+{
+  "files": [
+    {
+      "path": "SKILL.md",
+      "type": "file",
+      "language": "markdown",
+      "content": "..."
+    },
+    {
+      "path": "scripts/ta_engine.py",
+      "type": "file",
+      "language": "python",
+      "content": "..."
+    }
+  ]
+}
+```
+
+### PUT /api/v1/skill/files
+
+Saves changed files, creates git commit + SkillVersion record.
+
+**Request body:**
+
+```json
+{
+  "files": [
+    {
+      "path": "SKILL.md",
+      "content": "# Updated..."
+    }
+  ]
+}
+```
+
+**Response 200:**
+
+```json
+{
+  "success": true,
+  "commit_sha": "a1b2c3d4e5f6...",
+  "version": "2026-07-01.3",
+  "change_summary": "Updated SKILL.md, scripts/ta_engine.py"
+}
+```
+
+**Error 409 (conflict):**
+
+```json
+{
+  "error": "conflict",
+  "message": "Skill files on disk have changed since last fetch. Please reload and retry.",
+  "expected_hash": "abc...",
+  "actual_hash": "def..."
+}
+```
+
+## Implementation Steps
+
+See issue tracker or `/implement` for the phased rollout:
+
+1. **Backend**: Add `commit_sha` field to `SkillVersion` model, create `backend/services/skill_editor_service.py` (git I/O), create `backend/routers/skill_editor.py`, register in `main.py`.
+2. **Frontend**: `npm install vue-codemirror codemirror lang-markdown lang-python theme-one-dark`, create `SkillFileTree.vue`, `SkillEditor.vue`, `SkillEditorView.vue`, add route.
+3. **Integration**: Wire save/rollback flows, conflict detection, dirty-state tracking.

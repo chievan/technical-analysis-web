@@ -87,6 +87,9 @@ function onRemoveStock(code: string) {
 const model = ref("deepseek-chat");
 const analyzing = ref(false);
 const showAnalysisModal = ref(false);
+const showOverwriteConfirm = ref(false);
+const pendingAnalysisDate = ref("");
+const existingAnalysisId = ref<string | null>(null);
 const finalReport = ref<AnalysisReport | null>(null);
 const chartData = ref<ChartData | null>(null);
 const sameSymbolHistory = ref<AnalysisRecord[]>([]);
@@ -97,8 +100,13 @@ const backtestResult = ref<BacktestResult | null>(null);
 /* ─── Composables ─── */
 const { events, done, error, analysisId, chartDataStr, connect, disconnect } =
   useSSE();
-const { fetchReport, fetchHistory, fetchChartData, downloadReport } =
-  useAnalysis();
+const {
+  fetchReport,
+  fetchHistory,
+  fetchChartData,
+  downloadReport,
+  checkAnalysis,
+} = useAnalysis();
 
 /* ─── SSE event handlers ─── */
 watch(chartDataStr, (val) => {
@@ -150,17 +158,63 @@ watch(finalReport, async (report) => {
 });
 
 /* ─── Actions ─── */
-function startAnalysis() {
+async function startAnalysis() {
   if (!selectedStock.value.trim()) return;
-  analyzing.value = true;
-  showAnalysisModal.value = true;
   finalReport.value = null;
   chartData.value = null;
   sameSymbolHistory.value = [];
   showHistory.value = false;
 
-  const url = `/api/v1/analysis/start?symbol=${encodeURIComponent(selectedStock.value)}&model=${encodeURIComponent(model.value)}`;
+  // Check for existing report first
+  try {
+    const check = await checkAnalysis(selectedStock.value);
+    if (check.report_exists) {
+      pendingAnalysisDate.value = new Date().toISOString().slice(0, 10);
+      existingAnalysisId.value = check.analysis_id || null;
+      showOverwriteConfirm.value = true;
+      return;
+    }
+  } catch {
+    // Network error — proceed directly
+  }
+
+  doStartAnalysis(false);
+}
+
+function doStartAnalysis(force: boolean) {
+  analyzing.value = true;
+  showAnalysisModal.value = true;
+
+  const url = `/api/v1/analysis/start?symbol=${encodeURIComponent(selectedStock.value)}&model=${encodeURIComponent(model.value)}${force ? "&force=true" : ""}`;
   connect(url);
+}
+
+function confirmOverwrite() {
+  showOverwriteConfirm.value = false;
+  doStartAnalysis(true);
+}
+
+function cancelOverwrite() {
+  showOverwriteConfirm.value = false;
+  // Load existing report
+  if (existingAnalysisId.value) {
+    fetchReport(existingAnalysisId.value)
+      .then((r) => {
+        finalReport.value = r;
+        fetchChartData(existingAnalysisId.value!)
+          .then((saved) => {
+            if (saved) {
+              try {
+                chartData.value = JSON.parse(saved) as ChartData;
+              } catch {
+                chartData.value = null;
+              }
+            }
+          })
+          .catch(() => {});
+      })
+      .catch(() => {});
+  }
 }
 
 function closeAnalysis() {
@@ -359,6 +413,42 @@ watch(selectedStock, async (symbol) => {
         }
       "
     />
+
+    <!-- Overwrite Confirmation Dialog -->
+    <Teleport to="body">
+      <div
+        v-if="showOverwriteConfirm"
+        class="modal-overlay"
+        @click.self="showOverwriteConfirm = false"
+      >
+        <div class="modal-glass confirm-dialog">
+          <div class="modal-header">
+            <span class="modal-title">分析报告已存在</span>
+          </div>
+          <div class="confirm-body">
+            <p>
+              {{ selectedStock }} 在
+              {{ pendingAnalysisDate }} 的分析报告已存在。
+            </p>
+            <p>是否重新计算并覆写历史版本？</p>
+          </div>
+          <div class="confirm-actions">
+            <button
+              class="ctrl-btn confirm-btn cancel"
+              @click="cancelOverwrite"
+            >
+              取消 — 查看已有报告
+            </button>
+            <button
+              class="ctrl-btn confirm-btn overwrite"
+              @click="confirmOverwrite"
+            >
+              确认覆写
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -460,6 +550,52 @@ watch(selectedStock, async (symbol) => {
 .ctrl-btn-sm {
   padding: 5px 12px;
   font-size: 12px;
+}
+
+/* ─── Confirmation Dialog ─── */
+.confirm-dialog {
+  width: 420px;
+  max-width: 90vw;
+}
+.confirm-body {
+  padding: 24px 22px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+.confirm-body p {
+  margin-bottom: 8px;
+}
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  padding: 0 22px 22px;
+}
+.confirm-btn {
+  flex: 1;
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+}
+.confirm-btn.cancel {
+  background: var(--bg-glass);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+}
+.confirm-btn.cancel:hover {
+  background: var(--bg-glass-hover);
+  color: var(--text-primary);
+}
+.confirm-btn.overwrite {
+  background: linear-gradient(135deg, hsl(211, 90%, 52%), hsl(230, 70%, 48%));
+  border: none;
+  color: #fff;
+}
+.confirm-btn.overwrite:hover {
+  background: linear-gradient(135deg, hsl(211, 90%, 58%), hsl(230, 70%, 54%));
 }
 
 /* ─── Content ─── */

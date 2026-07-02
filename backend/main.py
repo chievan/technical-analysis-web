@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from backend.database import init_db, get_db
-from backend.models import BacktestResult
+from backend.models import Analysis, BacktestResult
 from backend.services.analysis_service import start_analysis
 from backend.services.history_service import (
     get_analysis_history,
@@ -17,6 +17,7 @@ from backend.services.history_service import (
     get_analysis_steps,
     get_analysis_report,
 )
+from backend.routers.skill_editor import router as skill_editor_router
 from backend.services.skill_version_service import compute_skill_hash, compute_version
 from backend.tools.engine_runner import run_backtester
 
@@ -36,6 +37,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(skill_editor_router)
 
 
 @app.get("/api/v1/skill/version")
@@ -60,6 +63,7 @@ def get_skill_versions(db: Session = Depends(get_db)):
     return [
         {
             "version": v.version,
+            "commit_sha": v.commit_sha,
             "change_summary": v.change_summary,
             "created_at": v.created_at.isoformat(),
             "files_count": _safe_files_count(v),
@@ -84,6 +88,7 @@ def get_skill_version_detail(version: str, db: Session = Depends(get_db)):
 
     return {
         "version": v.version,
+        "commit_sha": v.commit_sha,
         "change_summary": v.change_summary,
         "created_at": v.created_at.isoformat(),
         "files": files,
@@ -91,14 +96,49 @@ def get_skill_version_detail(version: str, db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/v1/analysis/check")
+def check_analysis_endpoint(
+    symbol: str = Query(...),
+    date: str = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Check if a completed analysis already exists for (symbol, date).
+
+    If no date is provided, defaults to today's date.
+    Returns report_exists + analysis metadata, or report_exists: false.
+    """
+    from datetime import date as _date
+
+    analysis_date = date or _date.today().isoformat()
+    existing = (
+        db.query(Analysis)
+        .filter(
+            Analysis.symbol == symbol,
+            Analysis.analysis_date == analysis_date,
+            Analysis.status == "completed",
+        )
+        .first()
+    )
+    if existing:
+        return {
+            "report_exists": True,
+            "analysis_id": existing.id,
+            "conclusion": existing.conclusion,
+            "created_at": existing.created_at.isoformat(),
+        }
+    return {"report_exists": False}
+
+
 @app.get("/api/v1/analysis/start")
 async def start_analysis_endpoint(
     symbol: str = Query(...),
     model: str = Query("deepseek-chat"),
+    date: str = Query(None),
+    force: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     return StreamingResponse(
-        start_analysis(symbol, model, db),
+        start_analysis(symbol, model, db, target_date=date, force=force),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

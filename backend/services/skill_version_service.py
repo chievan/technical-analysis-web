@@ -25,7 +25,7 @@ def compute_skill_hash() -> Dict[str, str]:
     return files_hash
 
 
-def compute_version(db: Session) -> str:
+def compute_version(db: Session, commit_sha: str | None = None) -> str:
     """Determine current skill version (YYYY-MM-DD.N).
 
     Reuses an existing version if the skill files hash is unchanged,
@@ -65,6 +65,7 @@ def compute_version(db: Session) -> str:
     record = SkillVersion(
         version=version,
         files_hash=files_hash_str,
+        commit_sha=commit_sha,
         change_summary=f"Auto-detected on {datetime.utcnow().isoformat()}",
     )
     db.add(record)

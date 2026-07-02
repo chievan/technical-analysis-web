@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import date as _date
 from typing import AsyncGenerator
 
 from sqlalchemy.orm import Session
@@ -9,16 +10,52 @@ from backend.services.skill_version_service import compute_skill_hash, compute_v
 from backend.agent.agent_service import stream_analysis
 
 
-async def start_analysis(symbol: str, model: str, db: Session) -> AsyncGenerator[str, None]:
+async def start_analysis(
+    symbol: str,
+    model: str,
+    db: Session,
+    target_date: str | None = None,
+    force: bool = False,
+) -> AsyncGenerator[str, None]:
+    analysis_date = target_date or _date.today().isoformat()
     skill_hash = compute_skill_hash()
     version = compute_version(db)
 
+    # ── Dedup check: if a completed report already exists for (symbol, date) ──
+    existing = (
+        db.query(Analysis)
+        .filter(
+            Analysis.symbol == symbol,
+            Analysis.analysis_date == analysis_date,
+            Analysis.status == "completed",
+        )
+        .first()
+    )
+    if existing:
+        if not force:
+            # Emit report_exists event and stop
+            sse = json.dumps({
+                "type": "report_exists",
+                "report_exists": True,
+                "analysis_id": existing.id,
+                "analysis_date": analysis_date,
+                "created_at": existing.created_at.isoformat(),
+            }, ensure_ascii=False)
+            yield f"data: {sse}\n\n"
+            return
+
+        # force=true: delete the old analysis (cascade removes steps + report)
+        db.delete(existing)
+        db.commit()
+
+    # ── Create new analysis with date ──
     analysis = Analysis(
         id=str(uuid.uuid4()),
         symbol=symbol,
         symbol_name="贵州茅台" if symbol == "600519" else symbol,
         model=model,
         skill_version=version,
+        analysis_date=analysis_date,
         status="running",
     )
     db.add(analysis)

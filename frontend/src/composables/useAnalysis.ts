@@ -5,12 +5,33 @@ export function useAnalysis() {
   const loading = ref(false);
   const error = ref<string | null>(null);
 
-  async function startAnalysis(symbol: string, model: string): Promise<string> {
+  async function checkAnalysis(
+    symbol: string,
+    date?: string
+  ): Promise<{
+    report_exists: boolean;
+    analysis_id?: string;
+    conclusion?: string;
+    created_at?: string;
+  }> {
+    const params = new URLSearchParams({ symbol });
+    if (date) params.set("date", date);
+    const res = await fetch(`/api/v1/analysis/check?${params}`);
+    if (!res.ok) throw new Error("Failed to check analysis");
+    return res.json();
+  }
+
+  async function startAnalysis(
+    symbol: string,
+    model: string,
+    force?: boolean
+  ): Promise<string> {
     loading.value = true;
     error.value = null;
 
     const params = new URLSearchParams({ symbol, model });
-    return `/api/v1/analysis/start?symbol=${encodeURIComponent(symbol)}&model=${encodeURIComponent(model)}`;
+    if (force) params.set("force", "true");
+    return `/api/v1/analysis/start?${params}`;
   }
 
   async function fetchAnalysis(id: string): Promise<AnalysisRecord> {
@@ -79,6 +100,7 @@ export function useAnalysis() {
   return {
     loading,
     error,
+    checkAnalysis,
     startAnalysis,
     fetchAnalysis,
     fetchReport,

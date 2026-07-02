@@ -33,6 +33,11 @@ const router = createRouter({
       name: "skill-versions",
       component: () => import("../views/SkillVersionsView.vue"),
     },
+    {
+      path: "/skill-editor",
+      name: "skill-editor",
+      component: () => import("../views/SkillEditorView.vue"),
+    },
   ],
 });
 
