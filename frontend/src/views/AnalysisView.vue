@@ -701,3 +701,102 @@ watch(selectedStock, async (symbol) => {
   opacity: 0.7;
 }
 </style>
+
+<!-- Non-scoped styles for Teleported modal content -->
+<style>
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: hsla(240, 18%, 4%, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: confirmFadeIn 0.2s ease;
+}
+@keyframes confirmFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.confirm-dialog {
+  width: 460px;
+  max-width: 90vw;
+  background: hsla(240, 14%, 12%, 0.95);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid hsla(0, 0%, 100%, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 24px 64px hsla(0, 0%, 0%, 0.6);
+  overflow: hidden;
+  animation: confirmModalIn 0.25s ease;
+}
+@keyframes confirmModalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.confirm-dialog .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px 12px;
+  border-bottom: 1px solid hsla(0, 0%, 100%, 0.06);
+}
+.confirm-dialog .modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+.confirm-body {
+  padding: 20px 22px;
+}
+.confirm-body p {
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 8px;
+}
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  padding: 14px 22px 20px;
+  justify-content: flex-end;
+}
+.confirm-btn {
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+.confirm-btn.cancel {
+  background: hsla(0, 0%, 100%, 0.06);
+  color: #94a3b8;
+  border-color: hsla(0, 0%, 100%, 0.1);
+}
+.confirm-btn.cancel:hover {
+  background: hsla(0, 0%, 100%, 0.1);
+  color: #e2e8f0;
+}
+.confirm-btn.overwrite {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+}
+.confirm-btn.overwrite:hover {
+  background: linear-gradient(135deg, #818cf8, #a78bfa);
+  box-shadow: 0 4px 16px hsla(265, 80%, 60%, 0.3);
+}
+</style>
